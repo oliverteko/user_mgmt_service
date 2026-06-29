@@ -40,15 +40,6 @@ USER appuser
 
 # Konfiguration ausschließlich über ENV-Variablen (keine Hardcoded Values)
 # hadolint ignore: DL3059
-ENV \
-    SPRING_DATASOURCE_URL="" \
-    SPRING_DATASOURCE_USERNAME="" \
-    SPRING_DATASOURCE_PASSWORD="" \
-    SPRING_JPA_HIBERNATE_DDL_AUTO="" \
-    JWT_ISSUER="" \
-    JWT_SECRET="" \
-    JWT_EXPIRATION_MILLIS="" \
-    JAVA_HOME=/app/jre \
 
 EXPOSE 8080
 
