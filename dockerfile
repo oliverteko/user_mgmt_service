@@ -38,9 +38,6 @@ COPY --chown=appuser:appgroup --from=build /app/build/libs/*.jar app.jar
 
 USER appuser
 
-# Konfiguration ausschließlich über ENV-Variablen (keine Hardcoded Values)
-# hadolint ignore: DL3059
-
 EXPOSE 8080
 
 # JSON-Notation (Hadolint DL3025 – kein Shell-Form für ENTRYPOINT)
