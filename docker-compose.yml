@@ -1,5 +1,23 @@
 services:
 
+  traefik:
+    image: traefik:v2.11
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+    environment:
+      DOCKER_API_VERSION: "1.54"
+    ports:
+      - "80:80"
+      - "8080:8080"   # Traefik Dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - backend-network
+
   postgres:
     image: postgres:16-alpine
     environment:
@@ -27,13 +45,16 @@ services:
       JWT_ISSUER: ${JWT_ISSUER}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRATION_MILLIS: ${JWT_EXPIRATION_MILLIS}
-    ports:
-      - "8080:8080"
     networks:
       - backend-network
     depends_on:
       postgres:
         condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.app.rule=PathPrefix(`/api`)"
+      - "traefik.http.routers.app.entrypoints=web"
+      - "traefik.http.services.app.loadbalancer.server.port=8080"
 
 networks:
   backend-network:
