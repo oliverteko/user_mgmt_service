@@ -6,15 +6,26 @@ services:
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # HTTP -> HTTPS Redirect für den web EntryPoint
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      # ACME / Let's Encrypt via HTTP-01 Challenge
+      - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.myresolver.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
       - "--api.dashboard=true"
       - "--api.insecure=true"
     environment:
       DOCKER_API_VERSION: "1.54"
     ports:
       - "80:80"
+      - "443:443"
       - "8080:8080"   # Traefik Dashboard
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - letsencrypt:/letsencrypt
     networks:
       - backend-network
 
@@ -53,7 +64,11 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.app.rule=PathPrefix(`/api`)"
-      - "traefik.http.routers.app.entrypoints=web"
+      - "traefik.http.routers.app.entrypoints=websecure"
+      - "traefik.http.routers.app.tls=true"
+      - "traefik.http.routers.app.tls.certresolver=myresolver"
+      - "traefik.http.routers.app.middlewares=strip-api"
+      - "traefik.http.middlewares.strip-api.stripprefix.prefixes=/api"
       - "traefik.http.services.app.loadbalancer.server.port=8080"
 
 networks:
@@ -62,3 +77,4 @@ networks:
 
 volumes:
   postgres_data:
+  letsencrypt:
