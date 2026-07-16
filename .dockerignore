@@ -1,0 +1,32 @@
+# Git
+.git
+.gitignore
+
+# Gradle
+.gradle
+build
+
+# IDE
+.idea
+.vscode
+*.iml
+*.ipr
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Local Gradle wrapper
+gradle-wrapper.jar
+
+# Temporary files
+*.tmp
+*.swp

@@ -1,44 +1,68 @@
 # =============================================================================
-# Stage 1: Build
-# Verwendet das offizielle Eclipse Temurin JDK 25 Image (noble = Ubuntu 24.04)
-# für den Build-Prozess mit dem Gradle Wrapper.
+# Stage 1: Build with caching optimizations
 # =============================================================================
-FROM eclipse-temurin:25-jdk-noble AS build
+FROM eclipse-temurin:25-jdk-alpine AS build
 
 WORKDIR /app
 
-# Gradle Wrapper und Build-Konfiguration zuerst kopieren (Layer-Caching für Dependencies)
-COPY gradlew .
+# Copy only files needed for dependency resolution first (maximize layer cache)
+COPY gradlew ./
 COPY gradle gradle
-COPY build.gradle .
-COPY settings.gradle .
+COPY build.gradle settings.gradle ./
 
-# Wrapper ausführbar machen und Dependencies vorab herunterladen (Cache-Layer)
-RUN chmod +x gradlew && ./gradlew dependencies --no-daemon
+# Make wrapper executable and resolve dependencies (cache this layer)
+RUN chmod +x gradlew && \
+    ./gradlew dependencies --no-daemon --max-workers=1
 
-# Quellcode kopieren und Projekt bauen (Tests werden übersprungen)
+# Copy source and build (tests skipped)
 COPY src src
-RUN ./gradlew bootJar --no-daemon -x test
+RUN ./gradlew bootJar --no-daemon -x test && \
+    # Clean up Gradle cache in same layer to reduce final image
+    rm -rf ~/.gradle/caches/
 
 # =============================================================================
-# Stage 2: Runtime
-# Schlankes JRE-only Alpine Image – kein JDK, kein Build-Tool, kein Source-Code.
-# eclipse-temurin:25-jre-alpine liegt deutlich unter 250 MB.
+# Stage 2: Minimal JRE for Spring Boot
 # =============================================================================
-FROM eclipse-temurin:25-jre-alpine AS runtime
+FROM eclipse-temurin:25-jdk-alpine AS jre
+RUN /opt/java/openjdk/bin/jlink \
+    --add-modules java.base,java.se,java.logging,java.sql,java.naming,java.xml,jdk.unsupported,jdk.management,jdk.crypto.ec \
+    --strip-debug \
+    --no-man-pages \
+    --no-header-files \
+    --compress=2 \
+    --output /custom-jre && \
+    rm -rf /opt/java/openjdk
+
+# =============================================================================
+# Stage 3: Ultra-minimal runtime (~50MB base + app)
+# =============================================================================
+FROM alpine:3.20 AS runtime
 
 WORKDIR /app
 
-# Non-Root User erstellen – Alpine nutzt addgroup/adduser statt groupadd/useradd
-RUN addgroup -S appgroup && \
-    adduser -S -G appgroup -H appuser
+# Install custom JRE
+COPY --from=jre /custom-jre /usr/lib/jvm/custom-jre
 
-# Nur das fertige JAR aus der Build-Stage übernehmen und Eigentümer direkt setzen
+# Create non-root user in single layer with runtime deps
+RUN addgroup -S appgroup && \
+    adduser -S -G appgroup -H -D appuser && \
+    # Install ca-certificates for HTTPS (critical for Spring Boot)
+    apk add --no-cache ca-certificates tzdata && \
+    rm -rf /var/cache/apk/*
+
+# Copy built JAR (specific filename pattern)
 COPY --chown=appuser:appgroup --from=build /app/build/libs/*.jar app.jar
+
+ENV JAVA_HOME=/usr/lib/jvm/custom-jre \
+    PATH=$JAVA_HOME/bin:$PATH \
+    TZ=UTC
 
 USER appuser
 
 EXPOSE 8080
 
-# JSON-Notation (Hadolint DL3025 – kein Shell-Form für ENTRYPOINT)
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", \
+    "-XX:+UseContainerSupport", \
+    "-XX:MaxRAMPercentage=75.0", \
+    "-Djava.security.egd=file:/dev/./urandom", \
+    "-jar", "app.jar"]
