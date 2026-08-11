@@ -29,6 +29,7 @@ jobs:
             JWT_SECRET=${{ secrets.JWT_SECRET }}
             JWT_EXPIRATION_MILLIS=${{ secrets.JWT_EXPIRATION_MILLIS }}
             ACME_EMAIL=${{ secrets.ACME_EMAIL }}
+            NEXT_PUBLIC_API_URL=https://${{ secrets.AZURE_VM_HOST }}/api
             EOF
 
             docker compose down
