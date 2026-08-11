@@ -53,8 +53,8 @@ RUN addgroup -S appgroup && \
 # Copy built JAR (specific filename pattern)
 COPY --chown=appuser:appgroup --from=build /app/build/libs/*.jar app.jar
 
-ENV JAVA_HOME=/usr/lib/jvm/custom-jre \
-    PATH=$JAVA_HOME/bin:$PATH \
+ENV JAVA_HOME=/usr/lib/jvm/custom-jre
+ENV PATH="/usr/lib/jvm/custom-jre/bin:${PATH}" \
     TZ=UTC
 
 USER appuser
