@@ -15,6 +15,7 @@ jobs:
           host: ${{ secrets.AZURE_VM_HOST }}
           username: ${{ secrets.AZURE_VM_USER }}
           key: ${{ secrets.AZURE_VM_SSH_KEY }}
+          script_stop: true
           script: |
             cd /opt/user_mgmt_service
             git pull origin main
