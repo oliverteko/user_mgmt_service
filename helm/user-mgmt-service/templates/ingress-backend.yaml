@@ -1,0 +1,35 @@
+{{- if .Values.ingress.enabled }}
+# Split into its own Ingress object (separate from the frontend Ingress) because
+# the router.middlewares annotation applies to the whole Ingress object - there's
+# no way to attach strip-api-prefix to only the /api rule within a single object.
+#
+# host: DigitalOcean Load Balancer IP as an sslip.io hostname (no DNS setup
+# needed). Placeholder until the Traefik LoadBalancer Service exists and its
+# external IP is known - see README.md. Must be kept in sync with
+# NEXT_PUBLIC_API_URL at frontend image build time and with ingress-frontend.yaml.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: backend-ingress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "user-mgmt-service.componentLabels" (dict "component" "backend" "context" $) | nindent 4 }}
+  annotations:
+    {{- if .Values.ingress.traefik.middleware.enabled }}
+    traefik.ingress.kubernetes.io/router.middlewares: {{ .Values.namespace }}-strip-api-prefix@kubernetescrd
+    {{- end }}
+    traefik.ingress.kubernetes.io/router.priority: {{ .Values.ingress.traefik.backendRouterPriority | quote }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: {{ .Values.ingress.host }}
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: {{ .Values.backend.service.port }}
+{{- end }}

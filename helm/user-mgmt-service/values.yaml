@@ -1,0 +1,123 @@
+# Default values for user-mgmt-service.
+# Production-like defaults matching the current DigitalOcean Kubernetes (DOKS) deployment.
+# Override per environment with -f values-<env>.yaml and/or --set.
+
+namespace: user-mgmt
+createNamespace: true
+
+nameOverride: ""
+fullnameOverride: ""
+
+postgres:
+  image:
+    repository: postgres
+    tag: "16-alpine"
+    pullPolicy: IfNotPresent
+  service:
+    port: 5432
+  persistence:
+    size: 1Gi
+    accessMode: ReadWriteOnce
+    # Empty = use the cluster's default StorageClass.
+    storageClassName: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+  probes:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 5
+
+backend:
+  image:
+    repository: ghcr.io/oliverteko/user-mgmt-service-backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    port: 8080
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  probes:
+    # tcpSocket, not httpGet: no public unauthenticated GET endpoint exists
+    # (only POST /users/login and /users/register are permitAll), so an
+    # httpGet probe would falsely report the pod as unhealthy.
+    initialDelaySeconds: 25
+    periodSeconds: 10
+    failureThreshold: 6
+
+frontend:
+  image:
+    repository: ghcr.io/oliverteko/user-mgmt-service-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    port: 3000
+  probes:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+  env:
+    # Runtime env var, server-side only. Maps to INTERNAL_API_URL.
+    internalApiUrl: "http://backend:8080"
+  # KNOWN LIMITATION: NEXT_PUBLIC_API_URL is intentionally NOT a value here.
+  # It is a Next.js build-time ARG that gets compiled into the static JS
+  # bundle by `frontend/Dockerfile` - it is NOT a container runtime env var,
+  # so no Helm value can change it after the image has been built. If
+  # ingress.host below changes, the frontend image must be rebuilt with a
+  # matching NEXT_PUBLIC_API_URL build ARG. See README.md for details.
+
+config:
+  databaseName: postgres
+  springDatasourceUrl: "jdbc:postgresql://postgres:5432/postgres"
+  springJpaHibernateDdlAuto: update
+  jwtIssuer: Spring
+  jwtExpirationMillis: "86400000"
+
+secret:
+  # true  = this chart renders a Secret from the values below (defaults are
+  #         placeholders only - override via --set or an untracked values file
+  #         at install/upgrade time, never commit real values).
+  # false = no Secret is rendered; `secret.name` must already exist in the
+  #         cluster (e.g. created imperatively via `kubectl create secret
+  #         generic`), matching the current production workflow.
+  create: true
+  name: app-secret
+  dbUsername: "REPLACE_ME"
+  dbPassword: "REPLACE_ME"
+  jwtSecret: "REPLACE_ME"
+
+ingress:
+  enabled: true
+  className: traefik
+  # Placeholder until the Traefik LoadBalancer Service exists and its
+  # external IP is known (DigitalOcean LB + sslip.io bootstrap - see
+  # README.md). Must be kept in sync with the frontend's NEXT_PUBLIC_API_URL
+  # build ARG (see the "KNOWN LIMITATION" note under frontend above).
+  host: REPLACE-WITH-LB-IP.sslip.io
+  traefik:
+    middleware:
+      # Requires the Traefik Middleware CRD to be registered in the cluster.
+      # Set to false if it isn't (or a different ingress controller is used)
+      # to still deploy plain Ingress objects without /api prefix-stripping.
+      enabled: true
+      stripApiPrefix: /api
+    backendRouterPriority: "10"
+    frontendRouterPriority: "1"

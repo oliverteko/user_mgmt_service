@@ -1,0 +1,31 @@
+user-mgmt-service has been deployed to namespace {{ .Values.namespace }}.
+
+{{- if .Values.ingress.enabled }}
+App URL (once the Traefik LoadBalancer external IP is known):
+  http://{{ .Values.ingress.host }}/
+  API:  http://{{ .Values.ingress.host }}/api
+
+{{- if eq .Values.ingress.host "REPLACE-WITH-LB-IP.sslip.io" }}
+WARNING: ingress.host is still set to the placeholder value. Update it (via
+--set ingress.host=... or a values overlay) once the Traefik LoadBalancer's
+external IP is known. See README.md for the bootstrap process.
+{{- end }}
+{{- else }}
+Ingress is disabled. Use `kubectl port-forward` to reach the services, e.g.:
+  kubectl -n {{ .Values.namespace }} port-forward svc/frontend 3000:{{ .Values.frontend.service.port }}
+  kubectl -n {{ .Values.namespace }} port-forward svc/backend 8080:{{ .Values.backend.service.port }}
+{{- end }}
+
+KNOWN LIMITATION: the frontend's NEXT_PUBLIC_API_URL is compiled into its JS
+bundle at Docker build time, not read at runtime - it cannot be changed via
+Helm values. If ingress.host changes, rebuild the frontend image with a
+matching NEXT_PUBLIC_API_URL build ARG. See README.md for details.
+
+{{- if .Values.secret.create }}
+{{- $placeholder := "REPLACE_ME" }}
+{{- if or (eq .Values.secret.dbPassword $placeholder) (eq .Values.secret.jwtSecret $placeholder) }}
+WARNING: secret.dbPassword/jwtSecret are still set to the "REPLACE_ME"
+placeholder. Override them at install/upgrade time (--set or an untracked
+values file) before using this release for anything real.
+{{- end }}
+{{- end }}

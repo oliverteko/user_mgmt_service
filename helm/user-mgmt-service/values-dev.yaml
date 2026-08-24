@@ -1,0 +1,27 @@
+# Example overlay for a local/dev environment. Only overrides what differs
+# from values.yaml - use with:
+#   helm upgrade --install user-mgmt-service ./helm/user-mgmt-service -f values-dev.yaml
+
+ingress:
+  traefik:
+    middleware:
+      # No Traefik Middleware CRD in a local/dev cluster (e.g. kind/minikube).
+      enabled: false
+
+postgres:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+backend:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 192Mi
+    limits:
+      cpu: 250m
+      memory: 384Mi

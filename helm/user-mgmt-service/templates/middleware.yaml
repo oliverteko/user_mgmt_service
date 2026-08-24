@@ -1,0 +1,16 @@
+{{- if and .Values.ingress.enabled .Values.ingress.traefik.middleware.enabled }}
+# Requires the Traefik Middleware CRD to be installed in the cluster.
+# Replicates the docker-compose label:
+#   traefik.http.middlewares.strip-api.stripprefix.prefixes=/api
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-api-prefix
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "user-mgmt-service.labels" . | nindent 4 }}
+spec:
+  stripPrefix:
+    prefixes:
+      - {{ .Values.ingress.traefik.middleware.stripApiPrefix }}
+{{- end }}

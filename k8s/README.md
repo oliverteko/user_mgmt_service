@@ -1,5 +1,7 @@
 # Kubernetes Manifests
 
+> **Hinweis:** Diese statischen Manifeste sind als Referenz erhalten geblieben. Für Deployments bitte den Helm Chart unter [`helm/user-mgmt-service/`](../helm/user-mgmt-service) verwenden — dort ist die gesamte Konfiguration zentral über `values.yaml` steuerbar. Die CI (`.github/workflows/build-and-push.yml`) nutzt aktuell noch diese Manifeste; die Umstellung auf `helm upgrade --install` ist als Folge-Task vorgesehen.
+
 Migration des `docker-compose.yml`-Setups (Next.js Frontend, Spring Boot Backend, PostgreSQL, Traefik) auf Kubernetes. Alle Ressourcen laufen im Namespace `user-mgmt`.
 
 ## Voraussetzungen

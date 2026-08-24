@@ -1,0 +1,26 @@
+{{- if .Values.ingress.enabled }}
+# host: see the comment in ingress-backend.yaml - must stay in sync with it
+# and with the frontend's NEXT_PUBLIC_API_URL build ARG.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: frontend-ingress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "user-mgmt-service.componentLabels" (dict "component" "frontend" "context" $) | nindent 4 }}
+  annotations:
+    traefik.ingress.kubernetes.io/router.priority: {{ .Values.ingress.traefik.frontendRouterPriority | quote }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: {{ .Values.ingress.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: {{ .Values.frontend.service.port }}
+{{- end }}
