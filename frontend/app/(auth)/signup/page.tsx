@@ -9,9 +9,8 @@ export default function SignupPage() {
     const router = useRouter();
 
     const handleSignup = async (data: SignupFormValues) => {
-        const api_url = process.env.NEXT_PUBLIC_API_URL + "/users/register";
         const userRegisterDTO : UserRegisterDTO = (({ confirmPassword, ...dto }) => dto)(data);
-        const response = await fetch(api_url, {
+        const response = await fetch("/api/register", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",

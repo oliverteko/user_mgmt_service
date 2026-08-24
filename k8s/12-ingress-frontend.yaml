@@ -1,17 +1,16 @@
-# host: see the comment in 11-ingress-backend.yaml - must stay in sync with it
-# and with NEXT_PUBLIC_API_URL in .github/workflows/build-and-push.yml.
+# No host set: the frontend now proxies all backend calls server-side
+# (see frontend/app/api/*/route.ts), so nothing needs to know the cluster's
+# external IP ahead of time. A hostless rule matches any incoming Host header,
+# so this works unchanged no matter how often the cluster/LB IP changes.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: frontend-ingress
   namespace: user-mgmt
-  annotations:
-    traefik.ingress.kubernetes.io/router.priority: "1"
 spec:
   ingressClassName: traefik
   rules:
-    - host: REPLACE-WITH-LB-IP.sslip.io
-      http:
+    - http:
         paths:
           - path: /
             pathType: Prefix

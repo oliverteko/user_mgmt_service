@@ -17,11 +17,6 @@ env:
   REGISTRY: ghcr.io
   BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/user-mgmt-service-backend
   FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/user-mgmt-service-frontend
-  # Must match the Ingress host in k8s/11-ingress-backend.yaml / k8s/12-ingress-frontend.yaml,
-  # since this is baked into the frontend's client JS bundle at build time.
-  # Placeholder until the DigitalOcean Load Balancer IP is known - see the
-  # "DigitalOcean" section in k8s/README.md for the one-time bootstrap.
-  NEXT_PUBLIC_API_URL: http://REPLACE-WITH-LB-IP.sslip.io/api
 
 permissions:
   contents: read
@@ -60,8 +55,6 @@ jobs:
           context: ./frontend
           file: ./frontend/Dockerfile
           push: true
-          build-args: |
-            NEXT_PUBLIC_API_URL=${{ env.NEXT_PUBLIC_API_URL }}
           tags: |
             ${{ env.FRONTEND_IMAGE }}:latest
             ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
@@ -81,12 +74,37 @@ jobs:
       - name: Save DOKS kubeconfig
         run: doctl kubernetes cluster kubeconfig save "${{ vars.DO_CLUSTER_NAME }}"
 
-      # app-secret is NOT applied here - it must already exist in the cluster
-      # (created once manually, see k8s/README.md) so real secret values never
-      # need to touch CI.
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      # Idempotent: installs Traefik (the Ingress controller + its LoadBalancer
+      # Service) on a freshly (re)created cluster, no-ops if already present.
+      # Runs on every deploy so the cluster never needs manual bootstrapping.
+      - name: Install/upgrade Traefik
+        run: |
+          helm repo add traefik https://traefik.github.io/charts
+          helm repo update
+          helm upgrade --install traefik traefik/traefik -n traefik --create-namespace
+
+      - name: Apply namespace
+        run: kubectl apply -f k8s/00-namespace.yaml
+
+      # Idempotent upsert: recreates app-secret from GitHub Secrets on every
+      # deploy, so a freshly (re)created cluster never needs a manual
+      # `kubectl create secret` step. Values never appear in git, only here.
+      # Reuses the same JWT_SECRET / SPRING_DATASOURCE_PASSWORD secrets
+      # already used by the Azure deploy path (deploy.yml) - same backend,
+      # same values, no need for separate DOKS-only secrets.
+      - name: Upsert app-secret
+        run: |
+          kubectl create secret generic app-secret -n user-mgmt \
+            --from-literal=DB_USERNAME=postgres \
+            --from-literal=DB_PASSWORD="${{ secrets.SPRING_DATASOURCE_PASSWORD }}" \
+            --from-literal=JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Apply manifests
         run: |
-          kubectl apply -f k8s/00-namespace.yaml
           kubectl apply -f k8s/01-configmap.yaml
           kubectl apply -f k8s/03-postgres-pvc.yaml
           kubectl apply -f k8s/04-postgres-deployment.yaml
@@ -95,8 +113,6 @@ jobs:
           kubectl apply -f k8s/07-backend-service.yaml
           kubectl apply -f k8s/08-frontend-deployment.yaml
           kubectl apply -f k8s/09-frontend-service.yaml
-          kubectl apply -f k8s/10-middleware.yaml
-          kubectl apply -f k8s/11-ingress-backend.yaml
           kubectl apply -f k8s/12-ingress-frontend.yaml
 
       # pins the rollout to the image just built (rather than relying on

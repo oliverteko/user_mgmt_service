@@ -4,7 +4,7 @@ Helm Chart für `user-mgmt-service` (Spring Boot Backend, Next.js Frontend, Post
 
 ## Voraussetzungen
 
-Wie bisher in [`k8s/README.md`](../../k8s/README.md) beschrieben: laufender Kubernetes-Cluster, Traefik inkl. CRDs installiert (`ingressClassName: traefik`), Images in einer erreichbaren Registry (GHCR).
+Wie bisher in [`k8s/README.md`](../../k8s/README.md) beschrieben: laufender Kubernetes-Cluster, Traefik installiert (`ingressClassName: traefik`), Images in einer erreichbaren Registry (GHCR).
 
 ## Chart-Struktur
 
@@ -25,8 +25,6 @@ helm/user-mgmt-service/
     backend-service.yaml
     frontend-deployment.yaml
     frontend-service.yaml
-    middleware.yaml       # Traefik Middleware (strip /api prefix)
-    ingress-backend.yaml
     ingress-frontend.yaml
     NOTES.txt
 ```
@@ -40,7 +38,7 @@ Alle Werte werden über `values.yaml` gesteuert. Wichtige Abschnitte:
 - `postgres.*`, `backend.*`, `frontend.*` — Image, Replicas, Resources, Probes je Komponente.
 - `config.*` — Werte für die ConfigMap `app-config` (DB-URL, JWT-Settings, etc.).
 - `secret.*` — siehe "Secrets" unten.
-- `ingress.*` — Host, IngressClass, Traefik-Middleware-Gating.
+- `ingress.*` — IngressClass, Enable/Disable.
 
 ### Umgebungen
 
@@ -73,14 +71,10 @@ helm upgrade --install user-mgmt-service ./helm/user-mgmt-service \
    ```
    Das ist der empfohlene Modus für den bestehenden DOKS-Produktionscluster (siehe [`k8s/README.md`](../../k8s/README.md)).
 
-### Ingress / Traefik Middleware
+### Ingress
 
-- `ingress.enabled: false` deaktiviert beide Ingress-Objekte und die Middleware vollständig (z.B. für lokales `kubectl port-forward`).
-- `ingress.traefik.middleware.enabled: false` deaktiviert nur die Traefik-`Middleware`-Ressource (falls die CRD im Cluster nicht registriert ist oder ein anderer Ingress-Controller verwendet wird) — die beiden Ingress-Objekte bleiben bestehen, nur ohne `/api`-Prefix-Stripping.
-
-### Bekannte Einschränkung: `NEXT_PUBLIC_API_URL`
-
-Wie bisher (siehe [`k8s/README.md`](../../k8s/README.md#bekannte-einschränkung-next_public_api_url)): Diese Variable wird beim Frontend-Image-Build fest ins JS-Bundle eingebacken und ist **kein** Runtime-Wert — sie kann nicht über `values.yaml` gesteuert werden. Ändert sich `ingress.host`, muss das Frontend-Image mit passendem `NEXT_PUBLIC_API_URL`-Build-Arg neu gebaut werden.
+- `ingress.enabled: false` deaktiviert das Ingress-Objekt vollständig (z.B. für lokales `kubectl port-forward`).
+- Die Ingress-Regel hat keinen `host` gesetzt und matched daher jede externe IP direkt — der Backend-Service ist nicht öffentlich exponiert, das Frontend proxied alle Backend-Aufrufe serverseitig über eigene Next.js-API-Routes (`INTERNAL_API_URL`). Es gibt daher keinen Hostname-Bootstrap und keine Traefik-Middleware mehr.
 
 ## Verifikation
 
@@ -95,15 +89,12 @@ helm template user-mgmt-service ./helm/user-mgmt-service
 # Gating-Kombinationen einzeln durchspielen
 helm template user-mgmt-service ./helm/user-mgmt-service --set secret.create=false
 helm template user-mgmt-service ./helm/user-mgmt-service --set ingress.enabled=false
-helm template user-mgmt-service ./helm/user-mgmt-service --set ingress.traefik.middleware.enabled=false
 
 # dev-Overlay
 helm lint ./helm/user-mgmt-service -f helm/user-mgmt-service/values-dev.yaml
 helm template user-mgmt-service ./helm/user-mgmt-service -f helm/user-mgmt-service/values-dev.yaml
 
-# Optional: Client-seitige Schema-Validierung der Core-Resources
-# (validiert die Traefik-CRD "Middleware" nicht, da deren Schema
-# kubectl client-seitig nicht bekannt ist - erwartet)
+# Optional: Client-seitige Schema-Validierung
 helm template user-mgmt-service ./helm/user-mgmt-service | kubectl apply --dry-run=client -f -
 ```
 
@@ -112,8 +103,7 @@ helm template user-mgmt-service ./helm/user-mgmt-service | kubectl apply --dry-r
 ```bash
 helm upgrade --install user-mgmt-service ./helm/user-mgmt-service \
   --namespace user-mgmt --create-namespace \
-  --set secret.create=false \
-  --set ingress.host=<load-balancer-ip>.sslip.io
+  --set secret.create=false
 ```
 
 (`secret.create=false`, sofern `app-secret` bereits imperativ im Cluster existiert — siehe "Secrets" oben.)

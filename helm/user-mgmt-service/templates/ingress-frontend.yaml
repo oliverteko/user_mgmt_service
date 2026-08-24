@@ -1,6 +1,7 @@
 {{- if .Values.ingress.enabled }}
-# host: see the comment in ingress-backend.yaml - must stay in sync with it
-# and with the frontend's NEXT_PUBLIC_API_URL build ARG.
+# No host set: all backend calls are proxied server-side by the frontend
+# (see frontend/app/api/*/route.ts), so nothing needs to know the cluster's
+# external IP ahead of time. A hostless rule matches any incoming Host header.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -8,13 +9,10 @@ metadata:
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "user-mgmt-service.componentLabels" (dict "component" "frontend" "context" $) | nindent 4 }}
-  annotations:
-    traefik.ingress.kubernetes.io/router.priority: {{ .Values.ingress.traefik.frontendRouterPriority | quote }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   rules:
-    - host: {{ .Values.ingress.host }}
-      http:
+    - http:
         paths:
           - path: /
             pathType: Prefix

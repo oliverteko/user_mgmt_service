@@ -75,14 +75,11 @@ frontend:
       cpu: 250m
       memory: 256Mi
   env:
-    # Runtime env var, server-side only. Maps to INTERNAL_API_URL.
+    # Runtime env var, server-side only. Maps to INTERNAL_API_URL. All backend
+    # calls are proxied server-side by the frontend's own API routes
+    # (frontend/app/api/*/route.ts) - the browser never talks to the backend
+    # directly, so no public/build-time API URL is needed at all.
     internalApiUrl: "http://backend:8080"
-  # KNOWN LIMITATION: NEXT_PUBLIC_API_URL is intentionally NOT a value here.
-  # It is a Next.js build-time ARG that gets compiled into the static JS
-  # bundle by `frontend/Dockerfile` - it is NOT a container runtime env var,
-  # so no Helm value can change it after the image has been built. If
-  # ingress.host below changes, the frontend image must be rebuilt with a
-  # matching NEXT_PUBLIC_API_URL build ARG. See README.md for details.
 
 config:
   databaseName: postgres
@@ -107,17 +104,8 @@ secret:
 ingress:
   enabled: true
   className: traefik
-  # Placeholder until the Traefik LoadBalancer Service exists and its
-  # external IP is known (DigitalOcean LB + sslip.io bootstrap - see
-  # README.md). Must be kept in sync with the frontend's NEXT_PUBLIC_API_URL
-  # build ARG (see the "KNOWN LIMITATION" note under frontend above).
-  host: REPLACE-WITH-LB-IP.sslip.io
-  traefik:
-    middleware:
-      # Requires the Traefik Middleware CRD to be registered in the cluster.
-      # Set to false if it isn't (or a different ingress controller is used)
-      # to still deploy plain Ingress objects without /api prefix-stripping.
-      enabled: true
-      stripApiPrefix: /api
-    backendRouterPriority: "10"
-    frontendRouterPriority: "1"
+  # No host: the frontend-ingress rule has no host restriction (matches any
+  # incoming Host header), since the backend is no longer publicly exposed -
+  # the frontend proxies all backend calls server-side. No IP/hostname needs
+  # to be known ahead of time, so this never needs updating after a cluster
+  # recreation.

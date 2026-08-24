@@ -22,9 +22,6 @@ spec:
           ports:
             - containerPort: 3000
           env:
-            # NEXT_PUBLIC_API_URL is intentionally NOT set here: it is baked into
-            # the client JS bundle at image build time (see frontend/Dockerfile)
-            # and has no effect as a runtime env var. See values.yaml for details.
             - name: INTERNAL_API_URL
               valueFrom:
                 configMapKeyRef:

@@ -2,12 +2,6 @@
 # from values.yaml - use with:
 #   helm upgrade --install user-mgmt-service ./helm/user-mgmt-service -f values-dev.yaml
 
-ingress:
-  traefik:
-    middleware:
-      # No Traefik Middleware CRD in a local/dev cluster (e.g. kind/minikube).
-      enabled: false
-
 postgres:
   resources:
     requests:
