@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  namespace: user-mgmt
+spec:
+  accessModes:
+    - ReadWriteOnce
+  # no storageClassName set -> uses the cluster's default StorageClass,
+  # keeping this portable between local (Minikube/Kind) and cloud (AKS) clusters
+  resources:
+    requests:
+      storage: 1Gi

@@ -1,0 +1,22 @@
+# host: see the comment in 11-ingress-backend.yaml - must stay in sync with it
+# and with NEXT_PUBLIC_API_URL in .github/workflows/build-and-push.yml.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: frontend-ingress
+  namespace: user-mgmt
+  annotations:
+    traefik.ingress.kubernetes.io/router.priority: "1"
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: REPLACE-WITH-LB-IP.sslip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 3000

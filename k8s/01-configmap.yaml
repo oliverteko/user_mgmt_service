@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: user-mgmt
+data:
+  DATABASE_NAME: "postgres"
+  # "postgres" resolves via the Kubernetes Service DNS name (k8s/05-postgres-service.yaml)
+  SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/postgres"
+  # "update" instead of compose's "create" - pods restart routinely under k8s,
+  # and "create" would drop/recreate the schema on every restart
+  SPRING_JPA_HIBERNATE_DDL_AUTO: "update"
+  JWT_ISSUER: "Spring"
+  JWT_EXPIRATION_MILLIS: "86400000"
+  # replaces compose's hardcoded http://app:8080 with the backend Service DNS name
+  INTERNAL_API_URL: "http://backend:8080"

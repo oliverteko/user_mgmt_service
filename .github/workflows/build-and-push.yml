@@ -1,0 +1,109 @@
+name: Build and Push to GHCR
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "src/**"
+      - "build.gradle"
+      - "settings.gradle"
+      - "dockerfile"
+      - "frontend/**"
+      - ".github/workflows/build-and-push.yml"
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/user-mgmt-service-backend
+  FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/user-mgmt-service-frontend
+  # Must match the Ingress host in k8s/11-ingress-backend.yaml / k8s/12-ingress-frontend.yaml,
+  # since this is baked into the frontend's client JS bundle at build time.
+  # Placeholder until the DigitalOcean Load Balancer IP is known - see the
+  # "DigitalOcean" section in k8s/README.md for the one-time bootstrap.
+  NEXT_PUBLIC_API_URL: http://REPLACE-WITH-LB-IP.sslip.io/api
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./dockerfile
+          push: true
+          tags: |
+            ${{ env.BACKEND_IMAGE }}:latest
+            ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ env.NEXT_PUBLIC_API_URL }}
+          tags: |
+            ${{ env.FRONTEND_IMAGE }}:latest
+            ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Save DOKS kubeconfig
+        run: doctl kubernetes cluster kubeconfig save "${{ vars.DO_CLUSTER_NAME }}"
+
+      # app-secret is NOT applied here - it must already exist in the cluster
+      # (created once manually, see k8s/README.md) so real secret values never
+      # need to touch CI.
+      - name: Apply manifests
+        run: |
+          kubectl apply -f k8s/00-namespace.yaml
+          kubectl apply -f k8s/01-configmap.yaml
+          kubectl apply -f k8s/03-postgres-pvc.yaml
+          kubectl apply -f k8s/04-postgres-deployment.yaml
+          kubectl apply -f k8s/05-postgres-service.yaml
+          kubectl apply -f k8s/06-backend-deployment.yaml
+          kubectl apply -f k8s/07-backend-service.yaml
+          kubectl apply -f k8s/08-frontend-deployment.yaml
+          kubectl apply -f k8s/09-frontend-service.yaml
+          kubectl apply -f k8s/10-middleware.yaml
+          kubectl apply -f k8s/11-ingress-backend.yaml
+          kubectl apply -f k8s/12-ingress-frontend.yaml
+
+      # pins the rollout to the image just built (rather than relying on
+      # :latest + pull policy), which reliably triggers a rolling update
+      - name: Roll out new images
+        run: |
+          kubectl set image deployment/backend backend=${{ env.BACKEND_IMAGE }}:${{ github.sha }} -n user-mgmt
+          kubectl set image deployment/frontend frontend=${{ env.FRONTEND_IMAGE }}:${{ github.sha }} -n user-mgmt
+          kubectl rollout status deployment/backend -n user-mgmt
+          kubectl rollout status deployment/frontend -n user-mgmt

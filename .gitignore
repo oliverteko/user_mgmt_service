@@ -4,3 +4,6 @@
 frontend/node_modules
 frontend/.next
 frontend/.env*
+
+# Kubernetes - local secret file generated from k8s/02-secret.example.yaml
+k8s/secret.yaml
