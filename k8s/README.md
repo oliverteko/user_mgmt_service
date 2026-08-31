@@ -1,6 +1,6 @@
 # Kubernetes Manifests
 
-> **Hinweis:** Diese statischen Manifeste sind als Referenz erhalten geblieben. Für Deployments bitte den Helm Chart unter [`helm/user-mgmt-service/`](../helm/user-mgmt-service) verwenden — dort ist die gesamte Konfiguration zentral über `values.yaml` steuerbar. Die CI (`.github/workflows/build-and-push.yml`) nutzt aktuell noch diese Manifeste; die Umstellung auf `helm upgrade --install` ist als Folge-Task vorgesehen.
+> **Hinweis:** Diese statischen Manifeste sind als Referenz erhalten geblieben. Das tatsächliche Deployment läuft nicht mehr über diese Manifeste, sondern per GitOps über [ArgoCD](https://argo-cd.readthedocs.io/): Helm Chart und ArgoCD Application Manifest liegen im separaten [`user-mgmt-service-ops`](https://github.com/oliverteko/user-mgmt-service-ops) Repository, das ArgoCD kontinuierlich mit dem Cluster synchronisiert. Details zum Cluster-Bootstrap siehe `.github/workflows/argocd-bootstrap.yml` in diesem Repo.
 
 Migration des `docker-compose.yml`-Setups (Next.js Frontend, Spring Boot Backend, PostgreSQL, Traefik) auf Kubernetes. Alle Ressourcen laufen im Namespace `user-mgmt`.
 
@@ -34,9 +34,11 @@ Ziel-Cluster ist DigitalOcean Kubernetes (DOKS). Zusätzlich zu den allgemeinen 
 
 Es ist **kein Hostname-Bootstrap nötig**: das Frontend proxied sämtliche Backend-Aufrufe serverseitig über eigene Next.js-API-Routes (`frontend/app/api/*/route.ts`), die den Backend-Service intern über `INTERNAL_API_URL` (`http://backend:8080`) erreichen. Der Browser spricht nie direkt mit dem Backend, daher muss die externe IP/Hostname vor dem Build nicht bekannt sein — `12-ingress-frontend.yaml` hat bewusst keinen `host` gesetzt und matched jeden eingehenden Host-Header. Das funktioniert unverändert, egal wie oft der Cluster (und damit die Load-Balancer-IP) neu erstellt wird.
 
-### Automatisches Deployment via CI
+### Deployment via GitOps (ArgoCD)
 
-`.github/workflows/build-and-push.yml` enthält einen `deploy`-Job, der nach jedem Image-Build automatisch auf den DOKS-Cluster deployt: Traefik wird idempotent installiert/aktualisiert (`helm upgrade --install`), `app-secret` wird aus GitHub Secrets idempotent angelegt (`kubectl ... --dry-run=client -o yaml | kubectl apply -f -`), dann `kubectl apply` + `kubectl set image` + `kubectl rollout status`. Das macht den Cluster nach einer Neuerstellung vollautomatisch wieder einsatzbereit — **kein einziger manueller `kubectl`/`helm`-Befehl nötig**, nur ein Push (oder ein manueller Workflow-Run) reicht. Dafür einmalig nötig (unabhängig von der Anzahl Cluster-Neuerstellungen):
+`.github/workflows/build-and-push.yml` baut und pusht nur noch die Images — das eigentliche Deployment übernimmt ArgoCD, das den Cluster kontinuierlich mit dem [`user-mgmt-service-ops`](https://github.com/oliverteko/user-mgmt-service-ops) Repository synchronisiert (siehe dortiges README).
+
+Der Cluster-Bootstrap (Traefik + ArgoCD installieren, `app-secret` anlegen, ArgoCD Application anwenden) läuft über den separaten, manuell getriggerten Workflow `.github/workflows/argocd-bootstrap.yml`. Dafür einmalig nötig (unabhängig von der Anzahl Cluster-Neuerstellungen):
 
 - GitHub Secret `DIGITALOCEAN_ACCESS_TOKEN` (DigitalOcean API Token mit Schreibrechten).
 - GitHub Variable `DO_CLUSTER_NAME` (Name des DOKS-Clusters).

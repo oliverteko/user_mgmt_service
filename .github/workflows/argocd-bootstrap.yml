@@ -1,0 +1,59 @@
+name: Bootstrap ArgoCD on DOKS
+
+on:
+  workflow_dispatch:
+
+env:
+  OPS_REPO_RAW_APPLICATION_URL: https://raw.githubusercontent.com/oliverteko/user-mgmt-service-ops/main/argocd/application.yaml
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Save DOKS kubeconfig
+        run: doctl kubernetes cluster kubeconfig save "${{ vars.DO_CLUSTER_NAME }}"
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      # Idempotent: installs Traefik (the Ingress controller + its LoadBalancer
+      # Service) on a freshly (re)created cluster, no-ops if already present.
+      # Cluster-level infra, unrelated to app releases - lives here rather
+      # than in build-and-push.yml, which now only builds/pushes images.
+      - name: Install/upgrade Traefik
+        run: |
+          helm repo add traefik https://traefik.github.io/charts
+          helm repo update
+          helm upgrade --install traefik traefik/traefik -n traefik --create-namespace
+
+      # ArgoCD lives in its own namespace, separate from the user-mgmt-service
+      # namespace it manages. Idempotent - safe to re-run after a cluster
+      # recreation or to pick up a newer ArgoCD version.
+      - name: Install/upgrade ArgoCD
+        run: |
+          helm repo add argo https://argoproj.github.io/argo-helm
+          helm repo update
+          helm upgrade --install argocd argo/argo-cd -n argocd --create-namespace
+
+      # app-secret is deliberately kept out of the ops repo / ArgoCD's control
+      # (Application manifest sets secret.create=false) - real credentials
+      # never enter git, only this idempotent upsert from GitHub Secrets.
+      - name: Ensure user-mgmt namespace and app-secret
+        run: |
+          kubectl create namespace user-mgmt --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret generic app-secret -n user-mgmt \
+            --from-literal=DB_USERNAME=postgres \
+            --from-literal=DB_PASSWORD="${{ secrets.SPRING_DATASOURCE_PASSWORD }}" \
+            --from-literal=JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      # From here on, ArgoCD owns the user-mgmt-service deployment: it
+      # continuously syncs the cluster with helm/user-mgmt-service in the
+      # ops repo. No more kubectl apply/set image against app resources.
+      - name: Apply ArgoCD Application
+        run: kubectl apply -f "${{ env.OPS_REPO_RAW_APPLICATION_URL }}"
