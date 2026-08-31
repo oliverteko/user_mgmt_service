@@ -59,6 +59,14 @@ jobs:
           helm repo update
           helm upgrade --install argocd argo/argo-cd -n argocd --create-namespace
 
+      # The backend HorizontalPodAutoscaler (prod) needs CPU metrics, which
+      # DOKS doesn't ship by default. Idempotent, like the installs above.
+      - name: Install/upgrade metrics-server
+        run: |
+          helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/
+          helm repo update
+          helm upgrade --install metrics-server metrics-server/metrics-server -n kube-system
+
       # app-secret is deliberately kept out of the ops repo / ArgoCD's control
       # (both Application manifests set secret.create=false) - real
       # credentials never enter git, only this idempotent upsert from GitHub
