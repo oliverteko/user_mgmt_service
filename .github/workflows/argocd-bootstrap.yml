@@ -18,6 +18,25 @@ jobs:
       - name: Save DOKS kubeconfig
         run: doctl kubernetes cluster kubeconfig save "${{ vars.DO_CLUSTER_NAME }}"
 
+      # A freshly (re)created cluster can accept the kubeconfig and answer
+      # reads before its control plane is fully stable, causing writes
+      # (e.g. the Secret creation below) to fail with "unexpected EOF".
+      # Wait for all nodes to report Ready before doing anything else.
+      - name: Wait for cluster readiness
+        run: |
+          for i in $(seq 1 30); do
+            node_count=$(kubectl get nodes --no-headers 2>/dev/null | wc -l)
+            ready_count=$(kubectl get nodes --no-headers 2>/dev/null | grep -c " Ready")
+            if [ "$node_count" -gt 0 ] && [ "$node_count" = "$ready_count" ]; then
+              echo "All $node_count node(s) Ready."
+              exit 0
+            fi
+            echo "Cluster not ready yet, retrying in 10s..."
+            sleep 10
+          done
+          echo "Cluster did not become ready in time" >&2
+          exit 1
+
       - name: Set up Helm
         uses: azure/setup-helm@v4
 
