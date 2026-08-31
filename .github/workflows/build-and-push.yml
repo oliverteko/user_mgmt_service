@@ -58,3 +58,31 @@ jobs:
           tags: |
             ${{ env.FRONTEND_IMAGE }}:latest
             ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+
+  promote:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    steps:
+      # Cross-repo push, so the repo-scoped GITHUB_TOKEN can't be used here -
+      # OPS_REPO_TOKEN is a PAT with contents:write on user-mgmt-service-ops.
+      - name: Checkout ops repo
+        uses: actions/checkout@v4
+        with:
+          repository: oliverteko/user-mgmt-service-ops
+          token: ${{ secrets.OPS_REPO_TOKEN }}
+
+      # yq is preinstalled on GitHub-hosted ubuntu runners.
+      - name: Bump image tags in values.yaml
+        run: |
+          yq -i '.backend.image.tag = "${{ github.sha }}"' helm/user-mgmt-service/values.yaml
+          yq -i '.frontend.image.tag = "${{ github.sha }}"' helm/user-mgmt-service/values.yaml
+
+      # ArgoCD's automated sync picks this commit up and rolls the new
+      # images out - no direct cluster access from this pipeline anymore.
+      - name: Commit and push promotion
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add helm/user-mgmt-service/values.yaml
+          git commit -m "Promote image tag to ${{ github.sha }}" || echo "Nothing to promote"
+          git push

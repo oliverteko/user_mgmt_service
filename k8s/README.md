@@ -42,7 +42,8 @@ Der Cluster-Bootstrap (Traefik + ArgoCD installieren, `app-secret` anlegen, Argo
 
 - GitHub Secret `DIGITALOCEAN_ACCESS_TOKEN` (DigitalOcean API Token mit Schreibrechten).
 - GitHub Variable `DO_CLUSTER_NAME` (Name des DOKS-Clusters).
-- GitHub Secrets `SPRING_DATASOURCE_PASSWORD` und `JWT_SECRET` (echte Werte für `app-secret` — dieselben Secrets, die auch der Azure-Deploy-Pfad (`deploy.yml`) nutzt; landen nie in Git, nur verschlüsselt in den GitHub-Repo-Secrets).
+- GitHub Secrets `SPRING_DATASOURCE_PASSWORD` und `JWT_SECRET` (echte Werte für `app-secret`; landen nie in Git, nur verschlüsselt in den GitHub-Repo-Secrets).
+- GitHub Secret `OPS_REPO_TOKEN` (PAT mit `contents:write` auf `user-mgmt-service-ops`, für die Image-Tag-Promotion in `build-and-push.yml`).
 
 ## Deployment
 
