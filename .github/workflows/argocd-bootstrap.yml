@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 env:
-  OPS_REPO_RAW_APPLICATION_URL: https://raw.githubusercontent.com/oliverteko/user-mgmt-service-ops/main/argocd/application.yaml
+  OPS_REPO_RAW_BASE: https://raw.githubusercontent.com/oliverteko/user-mgmt-service-ops/main/argocd
 
 jobs:
   bootstrap:
@@ -60,19 +60,26 @@ jobs:
           helm upgrade --install argocd argo/argo-cd -n argocd --create-namespace
 
       # app-secret is deliberately kept out of the ops repo / ArgoCD's control
-      # (Application manifest sets secret.create=false) - real credentials
-      # never enter git, only this idempotent upsert from GitHub Secrets.
-      - name: Ensure user-mgmt namespace and app-secret
+      # (both Application manifests set secret.create=false) - real
+      # credentials never enter git, only this idempotent upsert from GitHub
+      # Secrets. staging and prod are independent namespaces, each needs its
+      # own copy of the secret.
+      - name: Ensure namespaces and app-secret (staging + prod)
         run: |
-          kubectl create namespace user-mgmt --dry-run=client -o yaml | kubectl apply -f -
-          kubectl create secret generic app-secret -n user-mgmt \
-            --from-literal=DB_USERNAME=postgres \
-            --from-literal=DB_PASSWORD="${{ secrets.SPRING_DATASOURCE_PASSWORD }}" \
-            --from-literal=JWT_SECRET="${{ secrets.JWT_SECRET }}" \
-            --dry-run=client -o yaml | kubectl apply -f -
+          for ns in user-mgmt-staging user-mgmt-prod; do
+            kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f -
+            kubectl create secret generic app-secret -n "$ns" \
+              --from-literal=DB_USERNAME=postgres \
+              --from-literal=DB_PASSWORD="${{ secrets.SPRING_DATASOURCE_PASSWORD }}" \
+              --from-literal=JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+              --dry-run=client -o yaml | kubectl apply -f -
+          done
 
-      # From here on, ArgoCD owns the user-mgmt-service deployment: it
-      # continuously syncs the cluster with helm/user-mgmt-service in the
-      # ops repo. No more kubectl apply/set image against app resources.
-      - name: Apply ArgoCD Application
-        run: kubectl apply -f "${{ env.OPS_REPO_RAW_APPLICATION_URL }}"
+      # From here on, ArgoCD owns both environments: it continuously syncs
+      # each namespace with helm/user-mgmt-service (values-staging.yaml /
+      # values-prod.yaml) in the ops repo. No more kubectl apply/set image
+      # against app resources.
+      - name: Apply ArgoCD Applications
+        run: |
+          kubectl apply -f "${{ env.OPS_REPO_RAW_BASE }}/application-staging.yaml"
+          kubectl apply -f "${{ env.OPS_REPO_RAW_BASE }}/application-prod.yaml"

@@ -38,7 +38,9 @@ Es ist **kein Hostname-Bootstrap nötig**: das Frontend proxied sämtliche Backe
 
 `.github/workflows/build-and-push.yml` baut und pusht nur noch die Images — das eigentliche Deployment übernimmt ArgoCD, das den Cluster kontinuierlich mit dem [`user-mgmt-service-ops`](https://github.com/oliverteko/user-mgmt-service-ops) Repository synchronisiert (siehe dortiges README).
 
-Der Cluster-Bootstrap (Traefik + ArgoCD installieren, `app-secret` anlegen, ArgoCD Application anwenden) läuft über den separaten, manuell getriggerten Workflow `.github/workflows/argocd-bootstrap.yml`. Dafür einmalig nötig (unabhängig von der Anzahl Cluster-Neuerstellungen):
+Die Anwendung läuft parallel in zwei Umgebungen im selben Cluster — Namespaces `user-mgmt-staging` und `user-mgmt-prod`, je über eine eigene ArgoCD Application (`argocd/application-staging.yaml` / `argocd/application-prod.yaml` im Ops-Repo) verwaltet. `ResourceQuota` und `NetworkPolicy` pro Namespace stellen sicher, dass die Umgebungen sich weder Ressourcen noch Netzwerkzugriff teilen (Details im Ops-Repo).
+
+Der Cluster-Bootstrap (Traefik + ArgoCD installieren, `app-secret` in beiden Namespaces anlegen, beide ArgoCD Applications anwenden) läuft über den separaten, manuell getriggerten Workflow `.github/workflows/argocd-bootstrap.yml`. Dafür einmalig nötig (unabhängig von der Anzahl Cluster-Neuerstellungen):
 
 - GitHub Secret `DIGITALOCEAN_ACCESS_TOKEN` (DigitalOcean API Token mit Schreibrechten).
 - GitHub Variable `DO_CLUSTER_NAME` (Name des DOKS-Clusters).
