@@ -71,13 +71,20 @@ jobs:
       # (both Application manifests set secret.create=false) - real
       # credentials never enter git, only this idempotent upsert from GitHub
       # Secrets. staging and prod are independent namespaces, each needs its
-      # own copy of the secret.
+      # own copy of the secret. Since the ops repo's terraform/database.tf
+      # migration to DigitalOcean Managed PostgreSQL, DB_USERNAME/DB_PASSWORD
+      # are that managed database's app user (terraform output database_user /
+      # database_password), not a self-chosen postgres password anymore -
+      # SPRING_DATASOURCE_PASSWORD must hold the real `database_password`
+      # output. The username itself isn't secret, but comes from Terraform
+      # too (variables.tf database_user_name default), so it's hardcoded here
+      # to match rather than pulled from another secret.
       - name: Ensure namespaces and app-secret (staging + prod)
         run: |
           for ns in user-mgmt-staging user-mgmt-prod; do
             kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f -
             kubectl create secret generic app-secret -n "$ns" \
-              --from-literal=DB_USERNAME=postgres \
+              --from-literal=DB_USERNAME=user_mgmt_service \
               --from-literal=DB_PASSWORD="${{ secrets.SPRING_DATASOURCE_PASSWORD }}" \
               --from-literal=JWT_SECRET="${{ secrets.JWT_SECRET }}" \
               --dry-run=client -o yaml | kubectl apply -f -
