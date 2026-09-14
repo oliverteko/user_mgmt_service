@@ -87,7 +87,16 @@ jobs:
       # each namespace with helm/user-mgmt-service (values-staging.yaml /
       # values-prod.yaml) in the ops repo. No more kubectl apply/set image
       # against app resources.
+      #
+      # Kyverno's own Application goes in before its ClusterPolicies -
+      # policies (ops repo kyverno-policies/) need Kyverno's CRDs to exist.
+      # If they still race ahead on a from-scratch cluster, ArgoCD's
+      # automated sync + selfHeal retries the policies Application on its
+      # own once the CRDs land (see kyverno-policies/README.md in the ops
+      # repo), no extra wait step needed here.
       - name: Apply ArgoCD Applications
         run: |
           kubectl apply -f "${{ env.OPS_REPO_RAW_BASE }}/application-staging.yaml"
           kubectl apply -f "${{ env.OPS_REPO_RAW_BASE }}/application-prod.yaml"
+          kubectl apply -f "${{ env.OPS_REPO_RAW_BASE }}/application-kyverno.yaml"
+          kubectl apply -f "${{ env.OPS_REPO_RAW_BASE }}/application-kyverno-policies.yaml"
