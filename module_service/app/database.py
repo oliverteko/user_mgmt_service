@@ -13,7 +13,12 @@ class Base(DeclarativeBase):
 def _connect_args() -> dict[str, object]:
     settings = get_settings()
     if settings.database_url.startswith("mysql"):
-        return {"ssl_disabled": settings.mysql_ssl_disabled}
+        if settings.mysql_ssl_disabled:
+            return {"ssl_disabled": True}
+        # PyMySQL only negotiates TLS when an `ssl` dict is passed.
+        if settings.mysql_ssl_ca:
+            return {"ssl": {"ca": settings.mysql_ssl_ca}}
+        return {"ssl": {"check_hostname": False}}
     if settings.database_url.startswith("sqlite"):
         return {"check_same_thread": False}
     return {}

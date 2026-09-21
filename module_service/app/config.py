@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     database_url: str
     mysql_ssl_disabled: bool = True
+    # Path to the CA certificate of the managed MySQL cluster (DigitalOcean
+    # enforces TLS). When set, the server certificate is verified against it.
+    mysql_ssl_ca: str | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -42,3 +42,23 @@ uv sync --frozen --extra dev
 cp .env.example .env
 uvicorn app.main:app --reload --port 8080
 ```
+
+## Betrieb im user_mgmt_service-Cluster
+
+Dieser Ordner ist eine Kopie von [yagan93/module_service](https://github.com/yagan93/module_service) (Commit `ab09f1d`), ergänzt für den Betrieb in Kubernetes:
+
+| Ergänzung | Datei |
+| --- | --- |
+| Container-Image (non-root, UID 10001) | `Dockerfile` |
+| Schema + Seed-Module beim Start anlegen (idempotent, ersetzt das manuelle Ausführen von `schema.sql`) | `app/bootstrap.py` |
+| Health-Endpoints `/health/live` und `/health/ready` (prüft die DB-Verbindung) | `app/main.py` |
+| Prometheus-Metriken auf `/metrics` (`http_requests_total`, `http_request_duration_seconds`) | `app/metrics.py` |
+| TLS zur DigitalOcean Managed MySQL (`MYSQL_SSL_DISABLED=false`, `MYSQL_SSL_CA=<Pfad zum CA-Zertifikat>`) | `app/config.py`, `app/database.py` |
+| Tests (SQLite) | `tests/` |
+
+Das Image wird von `.github/workflows/build-and-push.yml` gebaut und als `ghcr.io/oliverteko/user-mgmt-service-module` publiziert; das Deployment liegt im Ops-Repo (`helm/user-mgmt-service`, `moduleService.*`).
+
+```bash
+uv sync --frozen --extra dev
+uv run pytest
+```
