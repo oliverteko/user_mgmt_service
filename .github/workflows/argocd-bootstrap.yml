@@ -90,6 +90,17 @@ jobs:
               --dry-run=client -o yaml | kubectl apply -f -
           done
 
+      # The module_service's credentials for its own DigitalOcean Managed MySQL
+      # (ops repo terraform/mysql.tf, `terraform output -raw
+      # module_database_password`). Deliberately a separate Secret from
+      # app-secret: only the module_service Deployment mounts it, so the
+      # user_mgmt_service backend never has the MySQL credentials.
+      - name: Ensure module-service-secret (staging + prod)
+        run: |
+          for ns in user-mgmt-staging user-mgmt-prod; do
+            kubectl create secret generic module-service-secret -n "$ns"               --from-literal=DB_PASSWORD="${{ secrets.MODULE_SERVICE_DB_PASSWORD }}"               --dry-run=client -o yaml | kubectl apply -f -
+          done
+
       # Same pattern as app-secret above: the Alertmanager webhook URL never
       # enters git. kube-prometheus-stack's Application (values.yaml in the
       # ops repo) references this Secret via alertmanagerSpec.secrets +
